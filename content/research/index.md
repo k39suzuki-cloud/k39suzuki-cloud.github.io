@@ -9,13 +9,13 @@ math: true
 
 ### Chern-Simons不変量と3次元多様体の幾何構造
 
-3次元多様体 $M$ 上のChern-Simons作用は、ゲージ群 $G$ の接続 $A$ に対して
+3次元閉多様体 $M$ 上の枠 $\mathrm{SO}(3)$ 束 $F(M) \to M$ に対し、Chern-Simons不変量は
 
 $$
-\mathrm{CS}(A) = \frac{1}{8\pi^2} \int_M \mathrm{tr}\!\left( A \wedge dA + \frac{2}{3} A \wedge A \wedge A \right)
+\mathrm{CS}(M) \coloneqq -\frac{1}{16\pi^2} \int_M s^*\operatorname{tr}\!\left( A \wedge dA + \frac{2}{3}A^3 \right) \in \mathbb{R}/\mathbb{Z}
 $$
 
-で定義されます。このとき $\mathrm{CS}(A) \bmod \mathbb{Z}$ はゲージ変換に関して不変であり、3次元多様体の位相不変量を与えます。
+と定義されます（Chern-Simons, 1974）。ここで $s \colon M \to F(M)$ は任意の切断であり、$A$ は $F(M)$ 上の接続形式です。この値は切断 $s$ の取り方によらず $\mathbb{R}/\mathbb{Z}$ の元として well-defined であり、3次元多様体の位相不変量を与えます。
 
 Thurstonの幾何化定理によれば、閉じた3次元多様体は8種類の幾何構造
 

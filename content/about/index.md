@@ -7,7 +7,7 @@ layout: single
 ## 自己紹介
 
 東京科学大学理学院数学系数学コース博士後期課程1年です。
-[野坂武史](https://www.math.titech.ac.jp/~nosaka/)研究室に所属し、3次元トポロジーおよびChern-Simons理論の研究を行っています。
+野坂武史研究室に所属し、3次元トポロジーおよびChern-Simons理論の研究を行っています。
 
 ## 所属
 
@@ -24,5 +24,5 @@ layout: single
 
 ## 連絡先
 
-- メール: [k39suzuki@gmail.com](mailto:k39suzuki@gmail.com)
+- メール: [suzuki.t.6577@m.isct.ac.jp](mailto:suzuki.t.6577@m.isct.ac.jp)
 - GitHub: [k39suzuki-cloud](https://github.com/k39suzuki-cloud)

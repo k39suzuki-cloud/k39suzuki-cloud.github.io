@@ -1,0 +1,57 @@
+baseURL: "https://k39suzuki-cloud.github.io/"
+languageCode: ja
+title: "Taiju Suzuki"
+theme: PaperMod
+pagination:
+  pagerSize: 10
+
+params:
+  author: Taiju Suzuki
+  description: "3次元トポロジー・Chern-Simons理論の研究者"
+  defaultTheme: auto
+  ShowReadingTime: false
+  ShowShareButtons: false
+  ShowPostNavLinks: true
+  ShowBreadCrumbs: false
+  ShowCodeCopyButtons: true
+
+  math: true
+
+  homeInfoParams:
+    Title: "Taiju Suzuki"
+    Content: |
+      3次元トポロジー・Chern-Simons理論を研究しています。
+
+  socialIcons:
+    - name: github
+      url: "https://github.com/k39suzuki-cloud"
+    - name: email
+      url: "mailto:k39suzuki@gmail.com"
+
+menu:
+  main:
+    - name: About
+      url: /about/
+      weight: 10
+    - name: Research
+      url: /research/
+      weight: 20
+    - name: Publications
+      url: /publications/
+      weight: 30
+    - name: Links
+      url: /links/
+      weight: 40
+
+markup:
+  goldmark:
+    renderer:
+      unsafe: true
+  highlight:
+    style: monokai
+
+outputs:
+  home:
+    - HTML
+    - RSS
+    - JSON

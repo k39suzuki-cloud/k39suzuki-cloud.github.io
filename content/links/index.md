@@ -3,6 +3,7 @@ title: "Links"
 date: 2026-04-21
 layout: single
 math: true
+description: "Taiju Suzuki のGitHubプロジェクト一覧。リー代数の不変多項式・コホモロジー計算ツールなど。"
 ---
 
 ## GitHubプロジェクト

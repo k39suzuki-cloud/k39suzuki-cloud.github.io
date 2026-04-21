@@ -2,6 +2,7 @@
 title: "About"
 date: 2026-04-21
 layout: single
+description: "東京科学大学 理学院 数学系 野坂武史研究室 博士後期課程1年。3次元トポロジー・Chern-Simons理論を専門とする数学研究者。"
 ---
 
 ## 自己紹介

@@ -2,6 +2,7 @@
 title: "Publications"
 date: 2026-04-21
 layout: single
+description: "Taiju Suzuki の論文・プレプリント・学会発表一覧。3次元トポロジー・Chern-Simons理論に関する研究業績。"
 ---
 
 ## 論文

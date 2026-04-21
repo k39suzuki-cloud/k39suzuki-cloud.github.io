@@ -5,9 +5,11 @@ theme: PaperMod
 pagination:
   pagerSize: 10
 
+enableRobotsTXT: true
+
 params:
   author: Taiju Suzuki
-  description: "3次元トポロジー・Chern-Simons理論の研究者"
+  description: "東京科学大学 博士後期課程。3次元多様体のChern-Simons不変量、特にThurstonの8つの幾何構造との関係を研究しています。"
   defaultTheme: auto
   ShowReadingTime: false
   ShowShareButtons: false
@@ -20,13 +22,16 @@ params:
   homeInfoParams:
     Title: "Taiju Suzuki"
     Content: |
-      3次元トポロジー・Chern-Simons理論を研究しています。
+      東京科学大学 理学院 数学系 博士後期課程。3次元多様体のChern-Simons不変量を研究しています。
 
   socialIcons:
     - name: github
       url: "https://github.com/k39suzuki-cloud"
     - name: email
       url: "mailto:suzuki.t.6577@m.isct.ac.jp"
+
+  assets:
+    favicon: "/favicon.ico"
 
 menu:
   main:
@@ -55,3 +60,7 @@ outputs:
     - HTML
     - RSS
     - JSON
+
+sitemap:
+  changefreq: monthly
+  priority: 0.5

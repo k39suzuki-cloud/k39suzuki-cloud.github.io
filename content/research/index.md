@@ -3,6 +3,7 @@ title: "Research"
 date: 2026-04-21
 layout: single
 math: true
+description: "3次元多様体のChern-Simons不変量の研究。Thurstonの8つの幾何構造をもつ多様体への応用、群コホモロジー・結び目理論・計算トポロジーとの関連。"
 ---
 
 ## 研究テーマ

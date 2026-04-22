@@ -20,7 +20,7 @@ params:
   math: true
 
   homeInfoParams:
-    Title: "Taiju Suzuki"
+    Title: "鈴木大樹 (Taiju Suzuki)"
     Content: |
       東京科学大学 理学院 数学系 博士後期課程。3次元多様体のChern-Simons不変量を研究しています。
 

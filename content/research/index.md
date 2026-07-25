@@ -3,7 +3,7 @@ title: "Research"
 date: 2026-04-21
 layout: single
 math: true
-description: "3次元多様体のChern-Simons不変量の研究。Thurstonの8つの幾何構造をもつ多様体への応用、群コホモロジー・結び目理論・計算トポロジーとの関連。"
+description: "3次元多様体のChern-Simons不変量の研究"
 ---
 
 ## 研究テーマ
@@ -28,24 +28,26 @@ $$
 のいずれかをもつ幾何的ピースに分解されます。私の研究では、これら8つの幾何構造をもつ多様体に対するChern-Simons不変量の性質を明らかにすることを目指しています。
 -->
 
-3次元多様体のChern-Simons不変量を研究しています。特に、Thurstonの8つの幾何構造をもつ多様体に対するChern-Simons不変量の性質を明らかにすることを目指しています。
+3次元多様体のChern-Simons不変量を研究しています。特に、Thurstonの8つの幾何構造をもつ多様体（幾何多様体）に対するChern-Simons不変量の性質を明らかにすることを目指しています。
 
 ## 手法
 
 - **微分トポロジー** — 多様体の大域的・局所的構造の解析
 - **ゲージ理論** — 接続・曲率・ホロノミーを用いた不変量の構成
 
-## 関連する興味
+## 関連する研究
 
 - **群コホモロジー** — 基本群の表現とChern-Simons不変量の代数的記述
 - **結び目理論** — 結び目補空間の幾何構造とChern-Simons不変量
 - **計算トポロジー** — 不変量の明示的な計算とアルゴリズム
 
-## インタラクティブな可視化
+## 興味
 
-[Nil / Sol 幾何ウォークスルー](/visualizations/nil-sol-walkthrough.html) — Riemannian ray marching による Nil 幾何・Sol 幾何の測地線可視化（WebGL2、マウス・キーボード操作対応）。
+-可視化
 
-**参考文献**
+8つの幾何構造を可視化する研究にも興味があります。具体的には、等質空間として得られる幾何多様体に対し、測地線を光の軌跡として多様体内部から描画することができます。以下はその例です。
+
+[Nil / Sol 幾何ウォークスルー](/visualizations/nil-sol-walkthrough.html) — Riemannian ray marching による Nil 幾何・Sol 幾何の可視化．次の文献を参考に作成．
 
 - William P. Thurston, *The Geometry and Topology of Three-Manifolds*, Princeton University lecture notes, 1979.
 - Peter Scott, *The geometries of 3-manifolds*, Bull. London Math. Soc. **15** (1983), 401–487.

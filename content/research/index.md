@@ -40,3 +40,7 @@ $$
 - **群コホモロジー** — 基本群の表現とChern-Simons不変量の代数的記述
 - **結び目理論** — 結び目補空間の幾何構造とChern-Simons不変量
 - **計算トポロジー** — 不変量の明示的な計算とアルゴリズム
+
+## インタラクティブな可視化
+
+[Nil / Sol 幾何ウォークスルー](/visualizations/nil-sol-walkthrough.html) — Riemannian ray marching による Nil 幾何・Sol 幾何の測地線可視化（WebGL2、マウス・キーボード操作対応）。

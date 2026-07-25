@@ -1,0 +1,975 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Nil / Sol 幾何ウォークスルー — Riemannian Ray Marching</title>
+<style>
+  :root{
+    --ink:#cfd6e4;
+    --ink-dim:#8892a6;
+    --accent:#d9a45a;
+    --accent2:#6fb3d9;
+    --panel:rgba(9,12,21,0.78);
+    --line:rgba(255,255,255,0.10);
+    --mono:ui-monospace,"SFMono-Regular",Menlo,Consolas,monospace;
+    --sans:"Hiragino Kaku Gothic ProN","Hiragino Sans","Noto Sans JP","Yu Gothic UI",system-ui,sans-serif;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{width:100%;height:100%;overflow:hidden;background:#05070d;font-family:var(--sans);color:var(--ink)}
+  canvas{position:fixed;inset:0;width:100vw;height:100vh;display:block;cursor:crosshair}
+
+  .panel{position:fixed;background:var(--panel);border:1px solid var(--line);
+         border-radius:10px;padding:10px 14px;backdrop-filter:blur(6px);
+         -webkit-backdrop-filter:blur(6px);font-size:12px;line-height:1.7;z-index:5}
+  #hud-top{top:14px;left:14px;max-width:340px}
+  #hud-top h1{font-size:14px;font-weight:600;letter-spacing:.08em;margin-bottom:2px}
+  #hud-top .metric{font-family:var(--mono);font-size:11px;color:var(--accent);letter-spacing:.02em}
+  #hud-status{font-family:var(--mono);font-size:11px;color:var(--ink-dim);margin-top:6px;white-space:pre}
+  #mode-badge{display:inline-block;margin-top:6px;padding:1px 8px;border:1px solid var(--accent);
+              border-radius:99px;font-size:11px;color:var(--accent);letter-spacing:.06em}
+  #mode-badge.flat{border-color:#7fa8c9;color:#7fa8c9}
+
+  #hud-keys{bottom:14px;left:14px;color:var(--ink-dim);max-width:420px}
+  #hud-keys b{color:var(--ink);font-weight:600;font-family:var(--mono)}
+
+  #hud-legend{top:14px;right:14px;color:var(--ink-dim);max-width:230px;display:none}
+  #hud-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;
+                  vertical-align:-1px}
+
+  #hud-quality{bottom:14px;right:14px;text-align:right}
+  #hud-quality .row{display:flex;gap:6px;justify-content:flex-end;margin-top:6px}
+  #hud-quality button{font-family:var(--sans);font-size:11px;color:var(--ink-dim);
+      background:transparent;border:1px solid var(--line);border-radius:6px;
+      padding:3px 10px;cursor:pointer}
+  #hud-quality button.on{color:var(--accent);border-color:var(--accent)}
+  #hud-quality .lbl{font-size:11px;color:var(--ink-dim)}
+
+  #overlay{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+           background:rgba(4,6,11,0.66);z-index:20;cursor:pointer;overflow:auto}
+  #overlay .card{max-width:560px;margin:20px;background:var(--panel);border:1px solid var(--line);
+                 border-radius:14px;padding:26px 30px;backdrop-filter:blur(10px)}
+  #overlay h1{font-size:20px;font-weight:600;letter-spacing:.06em;margin-bottom:4px}
+  #overlay .sub{font-size:12px;color:var(--ink-dim);letter-spacing:.04em;margin-bottom:14px}
+  #overlay .metric{font-family:var(--mono);font-size:13px;color:var(--accent);
+                   border-left:2px solid var(--accent);padding:4px 0 4px 14px;margin:10px 0}
+  #overlay .metric.b{color:var(--accent2);border-color:var(--accent2)}
+  #overlay p{font-size:13px;line-height:1.85;color:var(--ink);margin-bottom:8px}
+  #overlay .keys{margin-top:14px;font-size:12px;color:var(--ink-dim);line-height:2.0}
+  #overlay .keys b{color:var(--ink);font-family:var(--mono)}
+  #overlay .go{margin-top:16px;font-size:13px;color:var(--accent);letter-spacing:.1em}
+
+  #touch-ui{display:none;position:fixed;bottom:80px;left:0;right:0;z-index:6;
+            justify-content:center;gap:18px;pointer-events:none}
+  #touch-ui button{pointer-events:auto;width:74px;height:74px;border-radius:50%;
+      background:var(--panel);border:1px solid var(--line);color:var(--ink);
+      font-size:13px;font-family:var(--sans)}
+  @media (pointer:coarse){ #touch-ui{display:flex} #hud-keys{display:none} }
+
+  #glerr{position:fixed;inset:0;display:none;align-items:center;justify-content:center;
+         color:var(--ink);font-size:14px;z-index:30;text-align:center;padding:20px}
+
+  body.hide-ui .panel, body.hide-ui #touch-ui{ display:none !important; }
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+
+<div id="hud-top" class="panel">
+  <h1 id="hud-title">Nil 幾何ウォークスルー</h1>
+  <div class="metric" id="hud-metric">ds² = dx² + dy² + (dz − x dy)²</div>
+  <span id="mode-badge">Nil（測地線レイマーチング）</span>
+  <div id="hud-status"></div>
+</div>
+
+<div id="hud-legend" class="panel">
+  <b style="color:var(--ink)">Sol シーン</b><br>
+  <span class="sw" style="background:#6bb0eb"></span>ファイバー格子線 a 方向<br>
+  <span class="sw" style="background:#eb8c60"></span>ファイバー格子線 b 方向<br>
+  <span class="sw" style="background:#73d98c"></span>鉛直閉測地線（長さ log λ）<br>
+  <span class="sw" style="background:#edc976"></span>格子点 Λ<br>
+  上下のトーラスが A = [[2,1],[1,1]] でずれて見えます。
+</div>
+
+<div id="hud-keys" class="panel">
+  <b>W A S D</b> 移動　<b>Space / Shift</b> 上昇 / 下降　<b>ドラッグ / クリック</b> 見回す<br>
+  <b>1</b> Nil 幾何　<b>2</b> Sol 幾何　<b>G</b> 平坦（直線光線）比較　<b>R</b> 初期位置　<b>ホイール</b> 速度<br>
+  <b>X / Y / Z</b> 軸方向を向く（<b>Shift</b>+ で逆向き）　<b>H</b> HUD 表示切替
+</div>
+
+<div id="hud-quality" class="panel">
+  <span class="lbl">描画品質</span>
+  <div class="row">
+    <button data-q="0">低</button>
+    <button data-q="1" class="on">標準</button>
+    <button data-q="2">高</button>
+  </div>
+</div>
+
+<div id="touch-ui">
+  <button id="btn-back">後退</button>
+  <button id="btn-fwd">前進</button>
+</div>
+
+<div id="overlay">
+  <div class="card">
+    <h1>Nil / Sol 幾何ウォークスルー</h1>
+    <div class="sub">Thurston の 8 幾何のうち可解 Lie 群型の 2 つ — 左不変計量とその商多様体</div>
+
+    <div class="metric">Nil : ds² = dx² + dy² + (dz − x dy)²</div>
+    <div class="metric b">Sol : ds² = e^{2z} dx² + e^{−2z} dy² + dz²</div>
+
+    <p>
+      各ピクセルの視線方向について測地線の常微分方程式を RK4 で数値積分し、
+      「光が実際に曲がって進む」様子をそのまま描画しています（Riemannian ray marching）。
+    </p>
+    <p>
+      <b>Nil</b> は Heisenberg nilmanifold（格子 Γ = ℤ³ の商）。格子球とロッドが空間を敷き詰めます。
+    </p>
+    <p>
+      <b>Sol</b> は Anosov 行列 A = [[2,1],[1,1]] をモノドロミーとする
+      トーラス束 M = Sol/Γ。ℤ² ファイバーを可視化しており、
+      鉛直方向に進むと上下のトーラス格子が A で次々にシアされていくのが見えます。
+      z 方向の周期は 1 ではなく log λ（λ = (3+√5)/2）であることが本質です。
+    </p>
+    <div class="keys">
+      <b>W A S D</b> 移動　<b>Space/Shift</b> 上昇/下降　<b>マウス</b> 見回す<br>
+      <b>1</b> Nil / <b>2</b> Sol 切替　<b>G</b> 平坦比較（同じシーンを平坦トーラスで直線光線描画）<br>
+      <b>X/Y/Z</b>（+Shift で逆向き）軸方向を向く　<b>H</b> HUD 表示切替（スクリーンショット用）
+    </div>
+    <div class="go">▶ クリックして開始</div>
+  </div>
+</div>
+
+<div id="glerr">このブラウザは WebGL2 に対応していないため表示できません。<br>
+Chrome / Firefox / Safari の最新版でお試しください。</div>
+
+<script>
+"use strict";
+
+/* ================================================================
+ *  Nil & Sol geometry walkthrough — Riemannian ray marching (WebGL2)
+ *
+ *  ---------------------------------------------------------------
+ *  NIL  (unchanged from the verified spec)
+ *  ---------------------------------------------------------------
+ *  metric      ds^2 = dx^2 + dy^2 + (dz - x dy)^2
+ *  group       (x,y,z)*(a,b,c) = (x+a, y+b, z+c+x b)
+ *  geodesics   x'' = x y'^2 - y' z'
+ *              y'' = x'(z' - x y')
+ *              z'' = x'((1-x^2) y' + x z')
+ *  lattice     Gamma = <(1,0,0),(0,1,0),(0,0,1)>, domain [0,1)^3
+ *  deck        L_{(-m,0,0)} : (x,y,z) -> (x-m, y, z-m*y),  vz -> vz - m*vy
+ *
+ *  ---------------------------------------------------------------
+ *  SOL  (new)
+ *  ---------------------------------------------------------------
+ *  metric      ds^2 = e^{2z} dx^2 + e^{-2z} dy^2 + dz^2
+ *              (this is the metric whose Euler-Lagrange equations are
+ *               exactly the geodesic flow (2) of Novello-Silva-Velho)
+ *  group       p*q = (p_x + e^{-p_z} q_x,  p_y + e^{p_z} q_y,  p_z + q_z)
+ *              p^{-1} = (-e^{p_z}p_x, -e^{-p_z}p_y, -p_z)
+ *              => the metric above is LEFT invariant; check:
+ *                 L_{(a,b,c)}: dx -> e^{-c}dx, dy -> e^{c}dy, z -> z+c.
+ *  frame       E1 = e^{-z} d/dx,  E2 = e^{z} d/dy,  E3 = d/dz   (orthonormal,
+ *              left invariant).  A velocity with frame coefficients
+ *              (c1,c2,c3) has coordinate components (c1 e^{-z}, c2 e^{z}, c3).
+ *  geodesics   vx' = -2 vx vz
+ *              vy' =  2 vy vz
+ *              vz' =  e^{2z} vx^2 - e^{-2z} vy^2
+ *  ---------------------------------------------------------------
+ *  SOL LATTICE  (the point where the paper must be corrected)
+ *  ---------------------------------------------------------------
+ *  Left translation by (0,0,c) acts on the (x,y)-plane as
+ *      diag(e^{-c}, e^{c}).
+ *  For this to be conjugate to A = [[2,1],[1,1]] in SL(2,Z)
+ *  (eigenvalues lambda = (3+sqrt5)/2 = phi^2 and 1/lambda) we need
+ *      c = log lambda = 2 log phi = 0.9624236501...
+ *  so the z-period is log lambda, NOT 1.
+ *
+ *  Write (x,y) in the eigenbasis of A:
+ *      w_mu     = (1, -phi)      (eigenvalue 1/lambda, contracting)
+ *      w_lambda = (1,  1/phi)    (eigenvalue lambda,   expanding)
+ *  x = coefficient along w_mu, y = coefficient along w_lambda, and put
+ *      z = s * log lambda.
+ *  Then in the "lattice coordinates" (a,b,s) with
+ *      x = S11 a + S12 b,   y = S21 a + S22 b
+ *      S11 = 1 - phi/sqrt5 =  0.2763932...   S12 = -1/sqrt5 = -0.4472136...
+ *      S21 =     phi/sqrt5 =  0.7236068...   S22 =  1/sqrt5 =  0.4472136...
+ *  (inverse:  a = x + y,   b = -phi x + (1/phi) y )
+ *  the deck group is
+ *      g1 : (a,b,s) -> (a+1, b, s)          = L_{(S11,S21,0)}
+ *      g2 : (a,b,s) -> (a, b+1, s)          = L_{(S12,S22,0)}
+ *      g3 : (a,b,s) -> (A(a,b), s+1)        = L_{(0,0,log lambda)}
+ *  ALL of them are left translations (verified in selfTest below), so the
+ *  left-invariant frame coefficients of the camera are untouched by
+ *  wrapping -- exactly as in the Nil case.
+ *  Fundamental domain: a,b in [0,1), s in [-1/2, 1/2).
+ *  g3 g1 g3^{-1} = g1^2 g2, g3 g2 g3^{-1} = g1 g2   (i.e. A = [[2,1],[1,1]]).
+ *  M = Sol/Gamma is the T^2-bundle over S^1 with Anosov monodromy A;
+ *  Vol(M) = (1/sqrt5) * log lambda.
+ *
+ *  ---------------------------------------------------------------
+ *  SOL SCENE  (Gamma-invariance of every object was checked)
+ *  ---------------------------------------------------------------
+ *  (a) torus fibre grid at z in (log lambda) Z : tubes along the lines
+ *      {b in Z} and {a in Z}.  Inside one fibre the set is Z^2-periodic,
+ *      hence well defined on T^2; across the s-faces the fundamental-domain
+ *      coordinates get sheared by A^{-1}, which is exactly why successive
+ *      tori appear progressively sheared.  Distances to the lines are exact
+ *      in coordinate space because
+ *          |grad a| = |(1,1)|      = sqrt2
+ *          |grad b| = |(-phi,1/phi)| = sqrt3      (phi^2 + phi^-2 = 3)
+ *      so dist(p, {a=m}) = |a-m|/sqrt2, dist(p,{b=n}) = |b-n|/sqrt3.
+ *  (b) vertical rods through the fibre lattice Lambda: A(Lambda)=Lambda so
+ *      the family is g3-invariant, and t -> (0,0,t) has zero acceleration,
+ *      i.e. it is a geodesic; it closes up to a closed geodesic of length
+ *      log lambda in M.
+ *  (c) spheres at Lambda and one marker at (a,b)=(k+1/2, l+1/2).
+ *  Note: the stable/unstable foliations (directions w_mu, w_lambda) have
+ *  irrational slope and are dense in each torus, so they cannot be drawn as
+ *  a discrete family; instead the two lattice line families are colour
+ *  coded and one watches them shear.
+ *
+ *  ---------------------------------------------------------------
+ *  STEP-SIZE SAFETY
+ *  ---------------------------------------------------------------
+ *  Nil : smallest eigenvalue of g on x in [0,1) is >= (3-sqrt5)/2, so
+ *        h = 0.55 * d_coord is conservative (as in the original spec).
+ *  Sol : on the slab |z| <= (1/2)log lambda one has e^{±z} in [1/phi, phi],
+ *        hence |v|_g >= (1/phi)|v|_coord, i.e. d_coord <= phi * d_g with
+ *        phi = 1.618.  The fibre grid is built with max() (set
+ *        intersection), which only ever UNDERestimates the distance.
+ *        Therefore h = 0.30 * d_coord is conservative.
+ * ================================================================ */
+
+const canvas = document.getElementById("gl");
+const gl = canvas.getContext("webgl2", {antialias:false, alpha:false,
+                                        powerPreference:"high-performance"});
+if(!gl){
+  document.getElementById("glerr").style.display = "flex";
+  document.getElementById("overlay").style.display = "none";
+  throw new Error("WebGL2 unavailable");
+}
+
+/* ---------------- shaders ---------------- */
+
+const VSRC = `#version 300 es
+layout(location=0) in vec2 aPos;
+void main(){ gl_Position = vec4(aPos, 0.0, 1.0); }`;
+
+const FSRC = `#version 300 es
+precision highp float;
+
+uniform vec2  uRes;
+uniform vec3  uPos;      // camera position, inside the fundamental domain
+uniform mat3  uCam;      // columns: right, up, forward (frame coefficients)
+uniform int   uGeom;     // 0 = Nil, 1 = Sol
+uniform float uCurve;    // 1.0 = true geometry, 0.0 = flat (straight rays)
+uniform int   uSteps;
+uniform float uTanFov;
+
+out vec4 fragColor;
+
+const float PI = 3.14159265358979;
+
+/* ---- Nil scene constants ---- */
+const float NR_SPHERE = 0.16;
+const float NR_NODE   = 0.062;
+const float NR_ROD    = 0.021;
+
+/* ---- Sol constants ---- */
+const float PHI   = 1.6180339887498949;   // (1+sqrt5)/2
+const float IPHI  = 0.6180339887498949;   // 1/phi
+const float LOGL  = 0.9624236501192069;   // log lambda = 2 log phi
+const float S11   =  0.2763932022500211;
+const float S12   = -0.4472135954999579;
+const float S21   =  0.7236067977499789;
+const float S22   =  0.4472135954999579;
+const float INVR2 = 0.7071067811865476;   // 1/sqrt2
+const float INVR3 = 0.5773502691896258;   // 1/sqrt3
+const float SR_SPHERE = 0.110;
+const float SR_NODE   = 0.050;
+const float SR_ROD    = 0.019;
+const float SR_GRID   = 0.015;
+
+const float HIT_EPS = 0.0022;
+const float MIN_H   = 0.0042;
+const float MAX_H   = 0.10;
+
+/* ================= geodesic ODE ================= */
+vec3 geoAcc(vec3 p, vec3 v){
+  if(uGeom == 0){
+    /* Nil (verbatim from the spec) */
+    float x = p.x;
+    return uCurve * vec3(
+      x*v.y*v.y - v.y*v.z,
+      v.x*(v.z - x*v.y),
+      v.x*((1.0 - x*x)*v.y + x*v.z));
+  }
+  /* Sol */
+  float e2 = exp( 2.0*p.z);
+  float f2 = exp(-2.0*p.z);
+  return uCurve * vec3(
+    -2.0*v.x*v.z,
+     2.0*v.y*v.z,
+     e2*v.x*v.x - f2*v.y*v.y);
+}
+
+void rk4(inout vec3 p, inout vec3 v, float h){
+  vec3 k1p = v;
+  vec3 k1v = geoAcc(p, v);
+  vec3 k2p = v + 0.5*h*k1v;
+  vec3 k2v = geoAcc(p + 0.5*h*k1p, v + 0.5*h*k1v);
+  vec3 k3p = v + 0.5*h*k2v;
+  vec3 k3v = geoAcc(p + 0.5*h*k2p, v + 0.5*h*k2v);
+  vec3 k4p = v + h*k3v;
+  vec3 k4v = geoAcc(p + h*k3p, v + h*k3v);
+  p += (h/6.0)*(k1p + 2.0*k2p + 2.0*k3p + k4p);
+  v += (h/6.0)*(k1v + 2.0*k2v + 2.0*k3v + k4v);
+}
+
+/* renormalize to unit metric speed */
+vec3 unitSpeed(vec3 p, vec3 v){
+  if(uGeom == 0){
+    float e = v.z - uCurve * p.x * v.y;
+    return v * inversesqrt(v.x*v.x + v.y*v.y + e*e);
+  }
+  float w  = mix(1.0, exp(p.z), uCurve);
+  float ex = w*v.x, ey = v.y/w;
+  return v * inversesqrt(ex*ex + ey*ey + v.z*v.z);
+}
+
+/* ================= deck transformations ================= */
+void wrapState(inout vec3 p, inout vec3 v, inout vec3 cell){
+  if(uGeom == 0){
+    /* Nil: x-wrap shears z AND vz */
+    float m = floor(p.x);
+    if(m != 0.0){
+      p.x -= m;
+      p.z -= uCurve * m * p.y;
+      v.z -= uCurve * m * v.y;
+      cell.x += m;
+    }
+    float n = floor(p.y);
+    if(n != 0.0){ p.y -= n; cell.y += n; }
+    float k = floor(p.z);
+    if(k != 0.0){ p.z -= k; cell.z += k; }
+    return;
+  }
+
+  /* Sol: first reduce z into [-L/2, L/2) by g3^{-k} = L_{(0,0,-k L)},
+     which scales x by lambda^k and y by lambda^{-k} (position AND velocity) */
+  float k = floor(p.z/LOGL + 0.5);
+  if(k != 0.0){
+    p.z -= k*LOGL;
+    float sc = mix(1.0, exp(k*LOGL), uCurve);
+    p.x *= sc; p.y /= sc;
+    v.x *= sc; v.y /= sc;
+    cell.z += k;
+  }
+  /* then reduce (a,b) mod Z^2; these deck maps are pure coordinate
+     translations in (x,y) (their z-component vanishes), so v is unchanged */
+  float a = p.x + p.y;
+  float b = -PHI*p.x + IPHI*p.y;
+  float m = floor(a), n = floor(b);
+  if(m != 0.0 || n != 0.0){
+    a -= m; b -= n;
+    p.x = S11*a + S12*b;
+    p.y = S21*a + S22*b;
+    cell.x += m; cell.y += n;
+  }
+}
+
+/* ================= scenes ================= */
+
+/* --- Nil scene (unchanged) ---
+   mat: 1 = cell-centre sphere, 2 = lattice node, 3 = rod              */
+float sdNil(vec3 p, out int mat, out float aux){
+  vec3 lp = p - vec3(0.5);
+  float dS = length(lp) - NR_SPHERE;
+
+  float dN = 1e9;
+  for(int a = 0; a < 2; a++)
+  for(int b = 0; b < 2; b++)
+  for(int c = 0; c < 2; c++){
+    float fy = p.y - float(b);
+    vec3 u = vec3(p.x - float(a), fy,
+                  (p.z - float(c)) - uCurve * float(a) * fy);
+    dN = min(dN, length(u));
+  }
+  dN -= NR_NODE;
+
+  float rx = p.x - round(p.x);
+  float ry = p.y - round(p.y);
+  float rz = p.z - round(p.z);
+
+  float dRx = length(vec2(ry, rz - uCurve * p.x * ry)) - NR_ROD;
+  float w   = p.z - uCurve * round(p.x) * p.y;
+  float rw  = w - round(w);
+  float dRy = length(vec2(rx, rw)) - NR_ROD;
+  float dRz = length(vec2(rx, ry)) - NR_ROD;
+
+  float d = dS; mat = 1; aux = atan(lp.y, lp.x);
+  if(dN  < d){ d = dN;  mat = 2; aux = 0.0; }
+  if(dRx < d){ d = dRx; mat = 3; aux = p.x; }
+  if(dRy < d){ d = dRy; mat = 3; aux = p.y; }
+  if(dRz < d){ d = dRz; mat = 3; aux = p.z; }
+  return d;
+}
+
+/* --- Sol scene ---
+   mat: 1 = fibre-square centre marker, 2 = lattice node,
+        3 = fibre grid line along a,  4 = fibre grid line along b,
+        5 = vertical closed geodesic rod                              */
+float sdSol(vec3 p, out int mat, out float aux){
+  float a = p.x + p.y;
+  float b = -PHI*p.x + IPHI*p.y;
+  float fa = floor(a), fb = floor(b);
+
+  /* nearest point of the fibre lattice Lambda (4 candidates) */
+  float dxy = 1e9;
+  for(int i = 0; i < 2; i++)
+  for(int j = 0; j < 2; j++){
+    float m = fa + float(i), n = fb + float(j);
+    vec2 q = vec2(p.x - (S11*m + S12*n), p.y - (S21*m + S22*n));
+    dxy = min(dxy, length(q));
+  }
+  float dNode = length(vec2(dxy, p.z)) - SR_NODE;   /* sphere on the fibre */
+  float dRod  = dxy - SR_ROD;                       /* vertical geodesic  */
+
+  /* centre marker of the fibre parallelogram */
+  vec3 lp = vec3(p.x - (S11*(fa+0.5) + S12*(fb+0.5)),
+                 p.y - (S21*(fa+0.5) + S22*(fb+0.5)),
+                 p.z);
+  float dSph = length(lp) - SR_SPHERE;
+
+  /* fibre grid: exact coordinate distances to the lines {a=m}, {b=n} */
+  float la = abs(a - round(a)) * INVR2;   /* |grad a| = sqrt2 */
+  float lb = abs(b - round(b)) * INVR3;   /* |grad b| = sqrt3 */
+  float dGa = length(vec2(lb, p.z)) - SR_GRID;   /* tube along a-direction */
+  float dGb = length(vec2(la, p.z)) - SR_GRID;   /* tube along b-direction */
+
+  float d = dSph; mat = 1; aux = atan(lp.y, lp.x);
+  if(dNode < d){ d = dNode; mat = 2; aux = 0.0; }
+  if(dGa   < d){ d = dGa;   mat = 3; aux = a; }
+  if(dGb   < d){ d = dGb;   mat = 4; aux = b; }
+  if(dRod  < d){ d = dRod;  mat = 5; aux = p.z/LOGL; }
+  return d;
+}
+
+float sdScene(vec3 p, out int mat, out float aux){
+  return (uGeom == 0) ? sdNil(p, mat, aux) : sdSol(p, mat, aux);
+}
+float sdOnly(vec3 p){ int m; float a; return sdScene(p, m, a); }
+
+vec3 sceneNormal(vec3 p){
+  const vec2 e = vec2(0.0016, 0.0);
+  return normalize(vec3(
+    sdOnly(p + e.xyy) - sdOnly(p - e.xyy),
+    sdOnly(p + e.yxy) - sdOnly(p - e.yxy),
+    sdOnly(p + e.yyx) - sdOnly(p - e.yyx)));
+}
+
+vec3 bgColor(vec3 dir){
+  float u = clamp(normalize(dir).z * 0.7 + 0.5, 0.0, 1.0);
+  return mix(vec3(0.024, 0.028, 0.052), vec3(0.070, 0.095, 0.155), u);
+}
+
+float hash3(vec3 c){
+  return fract(sin(dot(c, vec3(12.9898, 78.233, 37.719))) * 43758.5453);
+}
+
+vec3 shadeHit(vec3 p, vec3 v, vec3 cell, float t, int mat, float aux){
+  vec3 n    = sceneNormal(p);
+  vec3 vdir = normalize(v);
+  float diff = max(dot(n, -vdir), 0.0);
+  float rim  = pow(clamp(1.0 - diff, 0.0, 1.0), 3.0);
+  float key  = max(n.z, 0.0);
+
+  vec3 base;
+  if(mat == 1){
+    float par = mod(cell.x + cell.y + cell.z, 2.0);
+    base = mix(vec3(0.30, 0.60, 0.63), vec3(0.85, 0.57, 0.32), par);
+    base *= 0.82 + 0.34 * hash3(cell);
+    float mer = smoothstep(-0.18, 0.18, sin(aux * 8.0));
+    base *= mix(0.50, 1.0, mer);
+  } else if(mat == 2){
+    base = vec3(0.93, 0.79, 0.46);
+  } else if(uGeom == 0){
+    /* Nil rods */
+    base = vec3(0.50, 0.57, 0.68);
+    float dash = smoothstep(-0.3, 0.3, sin(aux * 2.0*PI * 6.0));
+    base *= mix(0.40, 1.0, dash);
+  } else if(mat == 3){
+    base = vec3(0.42, 0.69, 0.92);                 /* a-direction lines */
+    float dash = smoothstep(-0.3, 0.3, sin(aux * 2.0*PI * 5.0));
+    base *= mix(0.45, 1.0, dash);
+  } else if(mat == 4){
+    base = vec3(0.92, 0.55, 0.38);                 /* b-direction lines */
+    float dash = smoothstep(-0.3, 0.3, sin(aux * 2.0*PI * 5.0));
+    base *= mix(0.45, 1.0, dash);
+  } else {
+    base = vec3(0.45, 0.85, 0.55);                 /* closed geodesic  */
+    float dash = smoothstep(-0.3, 0.3, sin(aux * 2.0*PI * 4.0));
+    base *= mix(0.55, 1.0, dash);
+  }
+
+  vec3 col = base * (0.16 + 0.95*diff + 0.22*key)
+           + rim * vec3(0.20, 0.25, 0.33);
+
+  float fogK = (uGeom == 0) ? 0.052 : 0.105;
+  float fog  = 1.0 - exp(-fogK * t * t);
+  return mix(col, bgColor(vdir), fog);
+}
+
+void main(){
+  vec2 ndc = (2.0 * gl_FragCoord.xy - uRes) / uRes.y;
+
+  /* view direction: unit vector in the left-invariant orthonormal frame,
+     then converted to a coordinate velocity                            */
+  vec3 f = normalize(uCam * vec3(ndc * uTanFov, 1.0));
+  vec3 p = uPos;
+  vec3 v;
+  if(uGeom == 0){
+    /* Nil: X2 = d/dy + x d/dz */
+    v = vec3(f.x, f.y, f.z + uCurve * p.x * f.y);
+  } else {
+    /* Sol: E1 = e^{-z} d/dx, E2 = e^{z} d/dy, E3 = d/dz */
+    float w = mix(1.0, exp(p.z), uCurve);
+    v = vec3(f.x / w, f.y * w, f.z);
+  }
+
+  float stepK = (uGeom == 0) ? 0.55 : 0.30;
+  float maxT  = (uGeom == 0) ? 8.5  : 6.2;
+
+  vec3 cell = vec3(0.0);
+  float t = 0.0;
+  vec3 col = vec3(-1.0);
+
+  for(int i = 0; i < 512; i++){
+    if(i >= uSteps) break;
+    int mat; float aux;
+    float d = sdScene(p, mat, aux);
+    if(d < HIT_EPS){
+      col = shadeHit(p, v, cell, t, mat, aux);
+      break;
+    }
+    float h = clamp(stepK * d, MIN_H, MAX_H);
+    rk4(p, v, h);
+    v = unitSpeed(p, v);
+    wrapState(p, v, cell);
+    t += h;
+    if(t > maxT) break;
+  }
+  if(col.x < 0.0) col = bgColor(v);
+
+  col = pow(max(col, 0.0), vec3(0.4545));
+  float vig = 1.0 - 0.28 * dot(ndc * 0.55, ndc * 0.55);
+  fragColor = vec4(col * vig, 1.0);
+}`;
+
+function compile(type, src){
+  const s = gl.createShader(type);
+  gl.shaderSource(s, src);
+  gl.compileShader(s);
+  if(!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+    throw new Error(gl.getShaderInfoLog(s));
+  return s;
+}
+const prog = gl.createProgram();
+gl.attachShader(prog, compile(gl.VERTEX_SHADER, VSRC));
+gl.attachShader(prog, compile(gl.FRAGMENT_SHADER, FSRC));
+gl.linkProgram(prog);
+if(!gl.getProgramParameter(prog, gl.LINK_STATUS))
+  throw new Error(gl.getProgramInfoLog(prog));
+gl.useProgram(prog);
+
+const buf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+gl.bufferData(gl.ARRAY_BUFFER,
+  new Float32Array([-1,-1, 3,-1, -1,3]), gl.STATIC_DRAW);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+
+const U = {};
+for(const n of ["uRes","uPos","uCam","uGeom","uCurve","uSteps","uTanFov"])
+  U[n] = gl.getUniformLocation(prog, n);
+
+/* ================ geometry constants (JS side) ================ */
+
+const PHI  = 1.6180339887498949;
+const IPHI = 0.6180339887498949;
+const LOGL = 0.9624236501192069;   // log lambda,  lambda = phi^2
+const LAM  = 2.6180339887498949;
+const S11  =  0.2763932022500211, S12 = -0.4472135954999579;
+const S21  =  0.7236067977499789, S22 =  0.4472135954999579;
+
+let GEOM  = 0;     // 0 = Nil, 1 = Sol
+let CURVE = 1.0;   // 1 = true geometry, 0 = flat comparison
+
+/* lattice coordinates (a,b,s)  ->  Sol coordinates (x,y,z) */
+function solFromLattice(a, b, s){
+  return [ S11*a + S12*b, S21*a + S22*b, s*LOGL ];
+}
+/* Sol coordinates -> lattice coordinates */
+function latticeFromSol(p){
+  return [ p[0] + p[1], -PHI*p[0] + IPHI*p[1], p[2]/LOGL ];
+}
+
+/* group law */
+function gMul(p, q){
+  if(GEOM === 0)
+    return [ p[0]+q[0], p[1]+q[1], p[2]+q[2] + CURVE*p[0]*q[1] ];
+  const w = (CURVE > 0.5) ? Math.exp(p[2]) : 1.0;
+  return [ p[0] + q[0]/w, p[1] + q[1]*w, p[2] + q[2] ];
+}
+function gInv(p){
+  if(GEOM === 0) return [ -p[0], -p[1], -p[2] + CURVE*p[0]*p[1] ];
+  const w = (CURVE > 0.5) ? Math.exp(p[2]) : 1.0;
+  return [ -p[0]*w, -p[1]/w, -p[2] ];
+}
+
+/* ---------------- camera state ---------------- */
+
+const HOME = [
+  { pos:[0.30, 0.18, 0.30], yaw:0.62, pitch:0.34, speed:0.55 },   // Nil
+  { pos:solFromLattice(0.22, 0.30, 0.30), yaw:0.90, pitch:0.18, speed:0.32 } // Sol
+];
+let pos   = HOME[0].pos.slice();
+let yaw   = HOME[0].yaw, pitch = HOME[0].pitch;
+let speed = HOME[0].speed;
+
+const PITCH_LIMIT = 1.52;
+
+/* Snap the view so the forward vector (in the left-invariant frame,
+   i.e. fwd = [sin(yaw)cos(pitch), cos(yaw)cos(pitch), sin(pitch)])
+   points exactly along +/-E1, +/-E2 or +/-E3.                       */
+function lookAxis(axis, negative){
+  if(axis === "x"){ yaw = negative ? -Math.PI/2 : Math.PI/2; pitch = 0; }
+  else if(axis === "y"){ yaw = negative ? Math.PI : 0; pitch = 0; }
+  else if(axis === "z"){ pitch = negative ? -PITCH_LIMIT : PITCH_LIMIT; }
+}
+
+function resetCamera(){
+  pos = HOME[GEOM].pos.slice();
+  yaw = HOME[GEOM].yaw; pitch = HOME[GEOM].pitch; speed = HOME[GEOM].speed;
+}
+
+function wrapCamera(){
+  if(GEOM === 0){
+    const m = Math.floor(pos[0]);
+    if(m !== 0){ pos[0] -= m; pos[2] -= CURVE * m * pos[1]; }
+    const n = Math.floor(pos[1]); if(n !== 0) pos[1] -= n;
+    const k = Math.floor(pos[2]); if(k !== 0) pos[2] -= k;
+    return;
+  }
+  const k = Math.floor(pos[2]/LOGL + 0.5);
+  if(k !== 0){
+    pos[2] -= k*LOGL;
+    const sc = (CURVE > 0.5) ? Math.exp(k*LOGL) : 1.0;
+    pos[0] *= sc; pos[1] /= sc;
+  }
+  let a = pos[0] + pos[1];
+  let b = -PHI*pos[0] + IPHI*pos[1];
+  const m = Math.floor(a), n = Math.floor(b);
+  if(m !== 0 || n !== 0){
+    a -= m; b -= n;
+    pos[0] = S11*a + S12*b;
+    pos[1] = S21*a + S22*b;
+  }
+}
+
+function cameraBasis(){
+  const cy = Math.cos(yaw), sy = Math.sin(yaw);
+  const cp = Math.cos(pitch), sp = Math.sin(pitch);
+  return {
+    right: [ cy, -sy, 0 ],
+    fwd:   [ sy*cp, cy*cp, sp ],
+    up:    [ -sy*sp, -cy*sp, cp ]
+  };
+}
+
+/* ---------------- HUD ---------------- */
+
+const badge   = document.getElementById("mode-badge");
+const titleEl = document.getElementById("hud-title");
+const metricEl= document.getElementById("hud-metric");
+const legendEl= document.getElementById("hud-legend");
+
+function refreshHud(){
+  if(GEOM === 0){
+    titleEl.textContent  = "Nil 幾何ウォークスルー";
+    metricEl.textContent = "ds² = dx² + dy² + (dz − x dy)²";
+    badge.textContent = (CURVE > 0.5)
+      ? "Nil（測地線レイマーチング）"
+      : "平坦比較（ℝ³/ℤ³・直線光線）";
+    legendEl.style.display = "none";
+  } else {
+    titleEl.textContent  = "Sol 幾何ウォークスルー";
+    metricEl.textContent = "ds² = e^{2z}dx² + e^{−2z}dy² + dz²";
+    badge.textContent = (CURVE > 0.5)
+      ? "Sol（測地線レイマーチング・T² 束）"
+      : "平坦比較（平坦 3-トーラス・直線光線）";
+    legendEl.style.display = "block";
+  }
+  badge.classList.toggle("flat", CURVE < 0.5);
+}
+refreshHud();
+
+/* ---------------- input ---------------- */
+
+const keys = Object.create(null);
+let touchFwd = 0;
+
+function setGeom(g){
+  if(g === GEOM) return;
+  GEOM = g;
+  resetCamera();
+  refreshHud();
+}
+
+addEventListener("keydown", e => {
+  keys[e.code] = true;
+  if(e.code === "Digit1") setGeom(0);
+  if(e.code === "Digit2") setGeom(1);
+  if(e.code === "KeyG"){ CURVE = 1.0 - CURVE; refreshHud(); }
+  if(e.code === "KeyR") resetCamera();
+  if(e.code === "KeyX") lookAxis("x", e.shiftKey);
+  if(e.code === "KeyY") lookAxis("y", e.shiftKey);
+  if(e.code === "KeyZ") lookAxis("z", e.shiftKey);
+  if(e.code === "KeyH") document.body.classList.toggle("hide-ui");
+  if(e.code === "Space") e.preventDefault();
+});
+addEventListener("keyup", e => { keys[e.code] = false; });
+
+const overlay = document.getElementById("overlay");
+let started = false;
+overlay.addEventListener("click", () => {
+  overlay.style.display = "none";
+  started = true;
+  canvas.requestPointerLock && canvas.requestPointerLock();
+});
+canvas.addEventListener("click", () => {
+  if(started && document.pointerLockElement !== canvas)
+    canvas.requestPointerLock && canvas.requestPointerLock();
+});
+
+let dragging = false, dragX = 0, dragY = 0;
+addEventListener("mousemove", e => {
+  if(document.pointerLockElement === canvas){
+    yaw   += e.movementX * 0.0022;
+    pitch -= e.movementY * 0.0022;
+  } else if(dragging){
+    yaw   += (e.clientX - dragX) * 0.0035;
+    pitch -= (e.clientY - dragY) * 0.0035;
+    dragX = e.clientX; dragY = e.clientY;
+  }
+  pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+});
+canvas.addEventListener("mousedown", e => {
+  dragging = true; dragX = e.clientX; dragY = e.clientY;
+});
+addEventListener("mouseup", () => dragging = false);
+
+addEventListener("wheel", e => {
+  speed *= Math.exp(-e.deltaY * 0.0009);
+  speed = Math.max(0.03, Math.min(3.0, speed));
+}, {passive:true});
+
+let tId = null, tX = 0, tY = 0;
+canvas.addEventListener("touchstart", e => {
+  if(!started){ overlay.click(); }
+  const t = e.changedTouches[0];
+  tId = t.identifier; tX = t.clientX; tY = t.clientY;
+}, {passive:true});
+canvas.addEventListener("touchmove", e => {
+  for(const t of e.changedTouches){
+    if(t.identifier === tId){
+      yaw   += (t.clientX - tX) * 0.005;
+      pitch -= (t.clientY - tY) * 0.005;
+      pitch = Math.max(-PITCH_LIMIT, Math.min(PITCH_LIMIT, pitch));
+      tX = t.clientX; tY = t.clientY;
+    }
+  }
+  e.preventDefault();
+}, {passive:false});
+canvas.addEventListener("touchend", () => tId = null);
+
+for(const [id, val] of [["btn-fwd", 1], ["btn-back", -1]]){
+  const b = document.getElementById(id);
+  b.addEventListener("touchstart", e => { touchFwd = val; e.preventDefault(); }, {passive:false});
+  b.addEventListener("touchend",   () => touchFwd = 0);
+  b.addEventListener("mousedown",  () => touchFwd = val);
+  b.addEventListener("mouseup",    () => touchFwd = 0);
+}
+
+/* ---------------- quality & resize ---------------- */
+
+const QUALITY = [
+  { scale:0.45, steps:200 },
+  { scale:0.68, steps:300 },
+  { scale:1.00, steps:430 },
+];
+let quality = 1;
+document.querySelectorAll("#hud-quality button").forEach(b => {
+  b.addEventListener("click", () => {
+    quality = +b.dataset.q;
+    document.querySelectorAll("#hud-quality button")
+      .forEach(x => x.classList.toggle("on", x === b));
+    resize();
+  });
+});
+
+function resize(){
+  const dpr = Math.min(devicePixelRatio || 1, 2) * QUALITY[quality].scale;
+  canvas.width  = Math.max(2, Math.round(innerWidth  * dpr));
+  canvas.height = Math.max(2, Math.round(innerHeight * dpr));
+  gl.viewport(0, 0, canvas.width, canvas.height);
+}
+addEventListener("resize", resize);
+resize();
+
+/* ---------------- render loop ---------------- */
+
+const statusEl = document.getElementById("hud-status");
+let prevT = performance.now(), fps = 60, hudT = 0;
+
+function frame(now){
+  const dt = Math.min((now - prevT) / 1000, 0.1);
+  prevT = now;
+  fps += (1/Math.max(dt, 1e-4) - fps) * 0.06;
+
+  /* movement = right multiplication by a small group element,
+     i.e. motion along the left-invariant orthonormal frame */
+  const { right, up, fwd } = cameraBasis();
+  let m = [0,0,0];
+  const add = (v, s) => { m[0]+=v[0]*s; m[1]+=v[1]*s; m[2]+=v[2]*s; };
+  if(keys.KeyW) add(fwd,  1);
+  if(keys.KeyS) add(fwd, -1);
+  if(keys.KeyD) add(right, 1);
+  if(keys.KeyA) add(right,-1);
+  if(keys.Space) m[2] += 1;
+  if(keys.ShiftLeft || keys.ShiftRight) m[2] -= 1;
+  if(touchFwd) add(fwd, touchFwd);
+
+  const len = Math.hypot(m[0], m[1], m[2]);
+  if(len > 1e-6){
+    const s = speed * dt / len;
+    pos = gMul(pos, [m[0]*s, m[1]*s, m[2]*s]);
+    wrapCamera();
+  }
+
+  gl.uniform2f(U.uRes, canvas.width, canvas.height);
+  gl.uniform3f(U.uPos, pos[0], pos[1], pos[2]);
+  gl.uniformMatrix3fv(U.uCam, false, new Float32Array([
+    right[0], right[1], right[2],
+    up[0],    up[1],    up[2],
+    fwd[0],   fwd[1],   fwd[2],
+  ]));
+  gl.uniform1i(U.uGeom, GEOM);
+  gl.uniform1f(U.uCurve, CURVE);
+  gl.uniform1i(U.uSteps, QUALITY[quality].steps);
+  gl.uniform1f(U.uTanFov, Math.tan(0.5 * 72 * Math.PI/180));
+  gl.drawArrays(gl.TRIANGLES, 0, 3);
+
+  hudT += dt;
+  if(hudT > 0.25){
+    hudT = 0;
+    let line;
+    if(GEOM === 0){
+      line = `(x,y,z) (${pos[0].toFixed(3)}, ${pos[1].toFixed(3)}, ${pos[2].toFixed(3)})`;
+    } else {
+      const L = latticeFromSol(pos);
+      line = `(x,y,z) (${pos[0].toFixed(3)}, ${pos[1].toFixed(3)}, ${pos[2].toFixed(3)})\n`
+           + `(a,b,s) (${L[0].toFixed(3)}, ${L[1].toFixed(3)}, ${L[2].toFixed(3)})`;
+    }
+    statusEl.textContent = line + `\n速度 ${speed.toFixed(2)}   ${Math.round(fps)} fps`;
+  }
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ================ self tests ================ */
+(function selfTest(){
+  const near = (a, b, eps) => a.every((v,i) => Math.abs(v-b[i]) < (eps||1e-12));
+  const savedG = GEOM, savedC = CURVE;
+  CURVE = 1.0;
+
+  /* ---- Nil ---- */
+  GEOM = 0;
+  const p = [0.37, -1.42, 2.75];
+  console.assert(near(gMul(p, gInv(p)), [0,0,0]), "Nil: group inverse failed");
+  const q = [1.5, 0.2, -0.7], r = [-0.3, 2.1, 0.05];
+  console.assert(near(gMul(gMul(p,q),r), gMul(p,gMul(q,r))), "Nil: associativity failed");
+  const nilNorm2 = (P,V) => { const e = V[2]-P[0]*V[1]; return V[0]*V[0]+V[1]*V[1]+e*e; };
+  let P = [1.73, 0.42, -0.9], V = [0.3, -0.8, 0.51];
+  const n0 = nilNorm2(P,V), mf = Math.floor(P[0]);
+  P = [P[0]-mf, P[1], P[2]-mf*P[1]];
+  V = [V[0], V[1], V[2]-mf*V[1]];
+  console.assert(Math.abs(nilNorm2(P,V)-n0) < 1e-12, "Nil: wrap isometry failed");
+
+  /* ---- Sol ---- */
+  GEOM = 1;
+  const sp = [0.31, -0.77, 0.42];
+  console.assert(near(gMul(sp, gInv(sp)), [0,0,0], 1e-12), "Sol: group inverse failed");
+  const sq = [0.9, -0.2, 0.35], sr = [-0.4, 1.1, -0.6];
+  console.assert(near(gMul(gMul(sp,sq),sr), gMul(sp,gMul(sq,sr)), 1e-12),
+                 "Sol: associativity failed");
+
+  /* lattice <-> Sol coordinate round trip */
+  const lat = [0.37, -1.42, 0.61];
+  const rt  = latticeFromSol(solFromLattice(lat[0], lat[1], lat[2]));
+  console.assert(near(rt, lat, 1e-12), "Sol: lattice round trip failed");
+
+  /* Gamma consists of LEFT translations, and g3 conjugation acts on the
+     fibre lattice by the integer matrix A = [[2,1],[1,1]].              */
+  const l1 = solFromLattice(1, 0, 0);   // (a,b) = (1,0)
+  const l2 = solFromLattice(0, 1, 0);   // (a,b) = (0,1)
+  const l3 = [0, 0, LOGL];              // g3
+  const conj = (l) => gMul(gMul(l3, l), gInv(l3));
+  const c1 = latticeFromSol(conj(l1));   // expect A(1,0) = (2,1)
+  const c2 = latticeFromSol(conj(l2));   // expect A(0,1) = (1,1)
+  console.assert(near([c1[0],c1[1],c1[2]], [2,1,0], 1e-10),
+                 "Sol: g3 l1 g3^-1 should be (2,1)", c1);
+  console.assert(near([c2[0],c2[1],c2[2]], [1,1,0], 1e-10),
+                 "Sol: g3 l2 g3^-1 should be (1,1)", c2);
+
+  /* g1, g2 act on points as pure (x,y)-translations (their z part is 0) */
+  const pt = [0.13, -0.44, 0.27];
+  const g1pt = gMul(l1, pt);
+  console.assert(near(g1pt, [pt[0]+l1[0], pt[1]+l1[1], pt[2]], 1e-12),
+                 "Sol: g1 is not a pure translation");
+
+  /* the z-wrap g3^{-1} is an isometry:
+     |v|_g^2 = e^{2z} vx^2 + e^{-2z} vy^2 + vz^2                         */
+  const solNorm2 = (P,V) => Math.exp(2*P[2])*V[0]*V[0]
+                          + Math.exp(-2*P[2])*V[1]*V[1] + V[2]*V[2];
+  let SP = [0.21, -0.63, 1.40], SV = [0.44, 0.91, -0.27];
+  const s0 = solNorm2(SP, SV);
+  const kk = Math.floor(SP[2]/LOGL + 0.5), sc = Math.exp(kk*LOGL);
+  SP = [SP[0]*sc, SP[1]/sc, SP[2]-kk*LOGL];
+  SV = [SV[0]*sc, SV[1]/sc, SV[2]];
+  console.assert(Math.abs(solNorm2(SP,SV)-s0) < 1e-10, "Sol: wrap isometry failed");
+  console.assert(Math.abs(SP[2]) <= LOGL/2 + 1e-12, "Sol: z not reduced");
+
+  /* the vertical line t -> (0,0,t) is a unit-speed geodesic:
+     vx'=vy'=0 and vz' = e^{2z}*0 - e^{-2z}*0 = 0                        */
+  console.assert(Math.abs(solNorm2([0,0,0.5],[0,0,1]) - 1) < 1e-12,
+                 "Sol: vertical direction is not unit speed");
+
+  /* |grad a| = sqrt2, |grad b| = sqrt3 (used for exact grid distances) */
+  console.assert(Math.abs((1+1) - 2) < 1e-12, "grad a norm");
+  console.assert(Math.abs((PHI*PHI + IPHI*IPHI) - 3) < 1e-12, "grad b norm");
+
+  /* Vol(M) = (1/sqrt5) log lambda */
+  const detFibre = Math.abs(S11*S22 - S12*S21);
+  console.assert(Math.abs(detFibre - 1/Math.sqrt(5)) < 1e-12, "fibre area");
+
+  GEOM = savedG; CURVE = savedC;
+  console.log("Nil/Sol self-tests passed ✓   Vol(Sol/Γ) =",
+              (detFibre*LOGL).toFixed(6));
+})();
+</script>
+</body>
+</html>

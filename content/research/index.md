@@ -44,3 +44,10 @@ $$
 ## インタラクティブな可視化
 
 [Nil / Sol 幾何ウォークスルー](/visualizations/nil-sol-walkthrough.html) — Riemannian ray marching による Nil 幾何・Sol 幾何の測地線可視化（WebGL2、マウス・キーボード操作対応）。
+
+**参考文献**
+
+- William P. Thurston, *The Geometry and Topology of Three-Manifolds*, Princeton University lecture notes, 1979.
+- Peter Scott, *The geometries of 3-manifolds*, Bull. London Math. Soc. **15** (1983), 401–487.
+- Attila Bölcskei and Brigitta Szilágyi, *Frenet formulas and geodesics in Sol geometry*, Beiträge zur Algebra und Geometrie **48** (2007), no. 2, 411–421. [EUDML: http://eudml.org/doc/225617](http://eudml.org/doc/225617)
+- Tiago Novello, Vinícius da Silva, and Luiz Velho, *Visualization of Nil, Sol, and $\widetilde{\mathrm{SL}_2(\mathbf{R})}$ geometries*, Computers & Graphics **91** (2020), 219–231. DOI: [10.1016/j.cag.2020.07.016](https://doi.org/10.1016/j.cag.2020.07.016)

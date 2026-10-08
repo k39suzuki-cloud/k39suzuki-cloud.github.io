@@ -11,7 +11,7 @@ description: "Taiju Suzuki の論文・プレプリント・学会発表一覧�
 
 ## プレプリント
 
-（arXivなどのプレプリントをここに追加します）
+- Suzuki, T. (2026). "Chern-Simons invariants and volumes of representations in Nil, Sol, and Euclidean geometries." arXiv preprint. [https://arxiv.org/abs/2609.21266](https://arxiv.org/abs/2609.21266)
 
 ## 講演・発表
 
